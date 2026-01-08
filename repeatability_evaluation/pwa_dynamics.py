@@ -10,6 +10,8 @@ import numeric_parameters as params
 
 # ZonoOpt for constrained zonotope formulations of constraint sets
 import zonoopt as zono
+from scipy import sparse
+import json
 
 # add symbolic inequalities to constrained zonotope
 def zono_add_symbolic_ineq(Z, x, ineq):
@@ -24,6 +26,35 @@ def zono_add_symbolic_ineq(Z, x, ineq):
     """
     A, b = get_matrices_affine_expression(x, ineq)
     return zono.halfspace_intersection(Z, A, b)
+
+def sparse_to_dict(m):
+    coo = m.tocoo()
+    return {
+        "row": coo.row.tolist(),
+        "col": coo.col.tolist(),
+        "data": coo.data.tolist(),
+        "shape": coo.shape
+    }
+
+def dict_to_sparse(d):
+    return sparse.coo_matrix((d["data"], (d["row"], d["col"])), shape=d["shape"]).tocsc()
+    
+def aff_sys_to_json(sys, filename):
+    dict = {
+        "A": sparse_to_dict(sparse.coo_matrix(sys.A)),
+        "B": sparse_to_dict(sparse.coo_matrix(sys.B)),
+        "c": sys.c.tolist()
+    }
+    with open(filename, 'w') as f:
+        json.dump(dict, f)
+
+def json_to_aff_sys(filename):
+    with open(filename, 'r') as f:
+        dict = json.load(f)
+    A = dict_to_sparse(dict["A"]).toarray()
+    B = dict_to_sparse(dict["B"]).toarray()
+    c = np.array(dict["c"])
+    return AffineSystem(A, B, c)
 
 
 # symbolic state
@@ -121,12 +152,14 @@ Z1 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
 Z1 = zono_add_symbolic_ineq(Z1, xu, sp.Matrix([- gap_floor_m1]))
 Z1 = zono_add_symbolic_ineq(Z1, xu, sp.Matrix([- gap_ceiling_m1]))
 
-print(Z1)
-
 # check domain
 assert D1.bounded
 assert not D1.empty
 assert not Z1.is_empty()
+
+# save to files
+aff_sys_to_json(S1, 'S1.json')
+zono.to_json(Z1, 'D1.json')
 
 # discrete time dynamics in mode 2
 # (ball sticking with the floor, not in contact with the ceiling)
@@ -158,9 +191,22 @@ D2.add_symbolic_inequality(xu, ball_on_floor.subs(f_m2))
 D2.add_symbolic_inequality(xu, sp.Matrix([ftf_m2 - params.mu*fnf_m2]))
 D2.add_symbolic_inequality(xu, sp.Matrix([- ftf_m2 - params.mu*fnf_m2]))
 
+# build domain as constrained zonotope
+Z2 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z2 = zono_add_symbolic_ineq(Z2, xu, sp.Matrix([gap_floor_m1]))
+Z2 = zono_add_symbolic_ineq(Z2, xu, sp.Matrix([- gap_ceiling_m1]))
+Z2 = zono_add_symbolic_ineq(Z2, xu, ball_on_floor.subs(f_m2))
+Z2 = zono_add_symbolic_ineq(Z2, xu, sp.Matrix([ftf_m2 - params.mu*fnf_m2]))
+Z2 = zono_add_symbolic_ineq(Z2, xu, sp.Matrix([- ftf_m2 - params.mu*fnf_m2]))
+
 # check domain
 assert D2.bounded
 assert not D2.empty
+assert not Z2.is_empty()
+
+# save to files
+aff_sys_to_json(S2, 'S2.json')
+zono.to_json(Z2, 'D2.json')
 
 # discrete time dynamics in mode 3
 # (ball sliding right on the floor, not in contact with the ceiling)
@@ -187,9 +233,21 @@ D3.add_symbolic_inequality(xu, ball_on_floor.subs(f_m3))
 # positive relative velocity
 D3.add_symbolic_inequality(xu, sp.Matrix([- sliding_velocity_floor.subs(f_m3)]))
 
+# build domain as constrained zonotope
+Z3 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z3 = zono_add_symbolic_ineq(Z3, xu, sp.Matrix([gap_floor_m1]))
+Z3 = zono_add_symbolic_ineq(Z3, xu, sp.Matrix([- gap_ceiling_m1]))
+Z3 = zono_add_symbolic_ineq(Z3, xu, ball_on_floor.subs(f_m3))
+Z3 = zono_add_symbolic_ineq(Z3, xu, sp.Matrix([- sliding_velocity_floor.subs(f_m3)]))
+
 # check domain
 assert D3.bounded
 assert not D3.empty
+assert not Z3.is_empty()
+
+# save to files
+aff_sys_to_json(S3, 'S3.json')
+zono.to_json(Z3, 'D3.json')
 
 # discrete time dynamics in mode 4
 # (ball sliding left on the floor, not in contact with the ceiling)
@@ -216,9 +274,21 @@ D4.add_symbolic_inequality(xu, ball_on_floor.subs(f_m4))
 # negative relative velocity
 D4.add_symbolic_inequality(xu, sp.Matrix([sliding_velocity_floor.subs(f_m4)]))
 
+# build domain as constrained zonotope
+Z4 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z4 = zono_add_symbolic_ineq(Z4, xu, sp.Matrix([gap_floor_m1]))
+Z4 = zono_add_symbolic_ineq(Z4, xu, sp.Matrix([- gap_ceiling_m1]))
+Z4 = zono_add_symbolic_ineq(Z4, xu, ball_on_floor.subs(f_m4))
+Z4 = zono_add_symbolic_ineq(Z4, xu, sp.Matrix([sliding_velocity_floor.subs(f_m4)]))
+
 # check domain
 assert D4.bounded
 assert not D4.empty
+assert not Z4.is_empty()
+
+# save to files
+aff_sys_to_json(S4, 'S4.json')
+zono.to_json(Z4, 'D4.json')
 
 # discrete time dynamics in mode 5
 # (ball sticking on the ceiling, not in contact with the floor)
@@ -250,9 +320,22 @@ D5.add_symbolic_inequality(xu, ball_on_ceiling.subs(f_m5))
 D5.add_symbolic_inequality(xu, sp.Matrix([ftc_m5 - params.mu*fnc_m5]))
 D5.add_symbolic_inequality(xu, sp.Matrix([- ftc_m5 - params.mu*fnc_m5]))
 
+# build domain as constrained zonotope
+Z5 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z5 = zono_add_symbolic_ineq(Z5, xu, sp.Matrix([- gap_floor_m1]))
+Z5 = zono_add_symbolic_ineq(Z5, xu, sp.Matrix([gap_ceiling_m1]))
+Z5 = zono_add_symbolic_ineq(Z5, xu, ball_on_ceiling.subs(f_m5))
+Z5 = zono_add_symbolic_ineq(Z5, xu, sp.Matrix([ftc_m5 - params.mu*fnc_m5]))
+Z5 = zono_add_symbolic_ineq(Z5, xu, sp.Matrix([- ftc_m5 - params.mu*fnc_m5]))
+
 # check domain
 assert D5.bounded
 assert not D5.empty
+assert not Z5.is_empty()
+
+# save to files
+aff_sys_to_json(S5, 'S5.json')
+zono.to_json(Z5, 'D5.json')
 
 # discrete time dynamics in mode 6
 # (ball sliding right on the ceiling, not in contact with the floor)
@@ -279,9 +362,21 @@ D6.add_symbolic_inequality(xu, ball_on_ceiling.subs(f_m6))
 # positive relative velocity
 D6.add_symbolic_inequality(xu, sp.Matrix([- sliding_velocity_ceiling.subs(f_m6)]))
 
+# build domain as constrained zonotope
+Z6 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z6 = zono_add_symbolic_ineq(Z6, xu, sp.Matrix([- gap_floor_m1]))
+Z6 = zono_add_symbolic_ineq(Z6, xu, sp.Matrix([gap_ceiling_m1]))
+Z6 = zono_add_symbolic_ineq(Z6, xu, ball_on_ceiling.subs(f_m6))
+Z6 = zono_add_symbolic_ineq(Z6, xu, sp.Matrix([- sliding_velocity_ceiling.subs(f_m6)]))
+
 # check domain
 assert D6.bounded
 assert not D6.empty
+assert not Z6.is_empty()
+
+# save to files
+aff_sys_to_json(S6, 'S6.json')
+zono.to_json(Z6, 'D6.json')
 
 # discrete time dynamics in mode 7
 # (ball sliding left on the ceiling, not in contact with the floor)
@@ -308,9 +403,21 @@ D7.add_symbolic_inequality(xu, ball_on_ceiling.subs(f_m7))
 # negative relative velocity
 D7.add_symbolic_inequality(xu, sp.Matrix([sliding_velocity_ceiling.subs(f_m7)]))
 
+# build domain as constrained zonotope
+Z7 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z7 = zono_add_symbolic_ineq(Z7, xu, sp.Matrix([- gap_floor_m1]))
+Z7 = zono_add_symbolic_ineq(Z7, xu, sp.Matrix([gap_ceiling_m1]))
+Z7 = zono_add_symbolic_ineq(Z7, xu, ball_on_ceiling.subs(f_m7))
+Z7 = zono_add_symbolic_ineq(Z7, xu, sp.Matrix([sliding_velocity_ceiling.subs(f_m7)]))
+
 # check domain
 assert D7.bounded
 assert not D7.empty
+assert not Z7.is_empty()
+
+# save to files
+aff_sys_to_json(S7, 'S7.json')
+zono.to_json(Z7, 'D7.json')
 
 # list of dynamics
 S_list = [S1, S2, S3, S4, S5, S6, S7]
