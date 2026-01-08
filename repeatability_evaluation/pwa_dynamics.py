@@ -3,10 +3,28 @@ import numpy as np
 import sympy as sp
 
 # internal imports
-from pympc.geometry.polyhedron import Polyhedron
+from pympc.geometry.polyhedron import Polyhedron, get_matrices_affine_expression
 from pympc.dynamics.discrete_time_systems import LinearSystem, AffineSystem, PieceWiseAffineSystem
-from pympc.control.hscc.controllers import HybridModelPredictiveController
+# from pympc.control.hscc.controllers import HybridModelPredictiveController
 import numeric_parameters as params
+
+# ZonoOpt for constrained zonotope formulations of constraint sets
+import zonoopt as zono
+
+# add symbolic inequalities to constrained zonotope
+def zono_add_symbolic_ineq(Z, x, ineq):
+    """
+    Args:
+        Z (zonoopt.ConZono): constrained zonotope
+        x (sympy matrix filled with sympy symbols): variables
+        ineq (sympy matrix filled with sympy symbolic affine expressions): left hand side of the inequality constraint.
+
+    Returns:
+        zonoopt.ConZono: constrained zonotope with added inequalities
+    """
+    A, b = get_matrices_affine_expression(x, ineq)
+    return zono.halfspace_intersection(Z, A, b)
+
 
 # symbolic state
 xb, yb, tb = sp.symbols('xb yb tb') # position of the ball
@@ -98,9 +116,17 @@ gap_ceiling_m1 = gap_ceiling.subs(f_m1)
 D1.add_symbolic_inequality(xu, sp.Matrix([- gap_floor_m1]))
 D1.add_symbolic_inequality(xu, sp.Matrix([- gap_ceiling_m1]))
 
+# build domain as constrained zonotope
+Z1 = zono.interval_2_zono(zono.Box(xu_min, xu_max))
+Z1 = zono_add_symbolic_ineq(Z1, xu, sp.Matrix([- gap_floor_m1]))
+Z1 = zono_add_symbolic_ineq(Z1, xu, sp.Matrix([- gap_ceiling_m1]))
+
+print(Z1)
+
 # check domain
 assert D1.bounded
 assert not D1.empty
+assert not Z1.is_empty()
 
 # discrete time dynamics in mode 2
 # (ball sticking with the floor, not in contact with the ceiling)
