@@ -128,6 +128,11 @@ xu = x.col_join(u)
 xu_min = np.concatenate((params.x_min, params.u_min))
 xu_max = np.concatenate((params.x_max, params.u_max))
 
+S = zono.interval_2_zono(zono.Box(params.x_min, params.x_max))
+U = zono.interval_2_zono(zono.Box(params.u_min, params.u_max))
+zono.to_json(S, 'S.json')
+zono.to_json(U, 'U.json')
+
 # discrete time dynamics in mode 1
 # (ball in the air)
 
